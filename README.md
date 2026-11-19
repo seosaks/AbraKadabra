@@ -4,7 +4,9 @@
 
 Исправляет текст, набранный в другой раскладке, и переключает язык дальнейшего ввода. Наберите `Ghbdtn rfr ltkf` и нажмите **Ctrl+Esc** — получится «Привет как дела». Сочетание работает в обе стороны.
 
-**Скачать для Mac:** откройте раздел **Releases** этого репозитория, выберите **1.0.0-beta.1** и скачайте **AbraKadabra-1.0.0-beta.1-macOS-universal.zip**. В одном архиве есть версии для Apple Silicon и Intel. Для работы нужны macOS 13 Ventura или новее и включённые русская и английская раскладки.
+**[Скачать для macOS · 1.0.0-beta.1 · ZIP](https://github.com/seosaks/AbraKadabra/releases/download/v1.0.0-beta.1/AbraKadabra-1.0.0-beta.1-macOS-universal.zip)** · [Страница выпуска и контрольная сумма](https://github.com/seosaks/AbraKadabra/releases/tag/v1.0.0-beta.1)
+
+В одном архиве есть версии для Apple Silicon и Intel. Для работы нужны macOS 13 Ventura или новее и включённые русская и английская раскладки.
 
 ### Первый запуск
 
