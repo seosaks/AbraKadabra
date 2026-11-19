@@ -22,6 +22,15 @@ struct Editor {
     func setRange(_ r: CFRange) -> Bool {
         AXUIElementSetAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, rangeValue(r)) == .success
     }
+    static func focusedProcess() -> pid_t? {
+        let system = Editor(element: AXUIElementCreateSystemWide())
+        guard let value = system.get(kAXFocusedUIElementAttribute),
+              CFGetTypeID(value) == AXUIElementGetTypeID() else { return nil }
+        var process: pid_t = 0
+        guard AXUIElementGetPid(value as! AXUIElement, &process) == .success, process > 0 else { return nil }
+        return process
+    }
+
     static func focused() throws -> Editor {
         guard let app = NSWorkspace.shared.frontmostApplication else { throw Issue("Активное приложение не найдено.") }
         let application = AXUIElementCreateApplication(app.processIdentifier)

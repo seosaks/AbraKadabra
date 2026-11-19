@@ -130,7 +130,10 @@ final class Controller: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     return (convert(text, from: toRussian ? en : ru, to: target), target)
                 }
                 let target: Layout
-                guard let app = NSWorkspace.shared.frontmostApplication else { throw Issue("Активное приложение не найдено.") }
+                guard let process = Editor.focusedProcess() ?? NSWorkspace.shared.frontmostApplication?.processIdentifier,
+                      let app = NSRunningApplication(processIdentifier: process) else {
+                    throw Issue("Активное поле ввода не найдено.")
+                }
                 let length = shortcut.session.take(process: app.processIdentifier, time: ProcessInfo.processInfo.systemUptime)
                 let id = app.bundleIdentifier ?? ""
                 let isYandex = id == "ru.yandex.desktop.yandex-browser"
@@ -138,14 +141,19 @@ final class Controller: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 if IsSecureEventInputEnabled() {
                     throw Issue("Защищённое поле ввода.")
                 }
-                if isChat || isYandex {
+                let usesWebEditor = ["com.figma.Desktop", "com.google.Chrome", "com.microsoft.edgemac",
+                                     "org.mozilla.firefox", "com.apple.Safari", "com.apple.Spotlight"].contains(id)
+                if isChat || isYandex || usesWebEditor {
                     target = try await correctChat(pid: app.processIdentifier, recentLength: length, convert: conversion)
                 } else {
                     let editor = try Editor.focused()
-                    let selection = try editor.selection(recentLength: length)
-                    let (converted, layout) = conversion(selection.text)
-                    if converted != selection.text { try editor.replace(selection, with: converted) }
-                    target = layout
+                    if let selection = try? editor.selection(recentLength: length) {
+                        let (converted, layout) = conversion(selection.text)
+                        if converted != selection.text { try editor.replace(selection, with: converted) }
+                        target = layout
+                    } else {
+                        target = try await correctChat(pid: app.processIdentifier, recentLength: length, convert: conversion)
+                    }
                 }
                 guard TISSelectInputSource(target.source) == noErr else { throw Issue("Не удалось включить целевую раскладку.") }
                 report("")

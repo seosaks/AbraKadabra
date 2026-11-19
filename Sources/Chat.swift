@@ -6,7 +6,7 @@ import Carbon
 func correctChat(pid: pid_t, recentLength: Int, convert: (String) -> (String, Layout)) async throws -> Layout {
     let board = NSPasteboard.general
     func checkFocus() throws {
-        guard NSWorkspace.shared.frontmostApplication?.processIdentifier == pid,
+        guard (Editor.focusedProcess() ?? NSWorkspace.shared.frontmostApplication?.processIdentifier) == pid,
               !IsSecureEventInputEnabled() else { throw Issue("Фокус ввода изменился.") }
     }
     func send(_ key: Int, _ flags: CGEventFlags) throws {
