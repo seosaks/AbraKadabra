@@ -4,6 +4,7 @@ import Carbon
 /// Consume only Control–Escape. All other keyboard events pass through unchanged.
 final class Shortcut {
     private var tap: CFMachPort?
+    private var runLoopSource: CFRunLoopSource?
     private var swallowingEscape = false
     let session = TypingSession()
     let action: () -> Void
@@ -11,7 +12,13 @@ final class Shortcut {
     init(action: @escaping () -> Void) { self.action = action }
 
     func start() -> Bool {
-        if tap != nil { return true }
+        if let tap {
+            if CFMachPortIsValid(tap) {
+                CGEvent.tapEnable(tap: tap, enable: true)
+                return CGEvent.tapIsEnabled(tap: tap)
+            }
+            stop()
+        }
         let types: [CGEventType] = [.keyDown, .keyUp, .leftMouseDown, .rightMouseDown, .otherMouseDown]
         let mask = types.reduce(CGEventMask(0)) { $0 | (CGEventMask(1) << $1.rawValue) }
         guard let port = CGEvent.tapCreate(tap: .cgSessionEventTap, place: .headInsertEventTap,
@@ -49,8 +56,20 @@ final class Shortcut {
                 return Unmanaged.passUnretained(event)
             }, userInfo: Unmanaged.passUnretained(self).toOpaque()) else { return false }
         tap = port
-        CFRunLoopAddSource(CFRunLoopGetMain(), CFMachPortCreateRunLoopSource(nil, port, 0), .commonModes)
+        runLoopSource = CFMachPortCreateRunLoopSource(nil, port, 0)
+        CFRunLoopAddSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
         CGEvent.tapEnable(tap: port, enable: true)
-        return true
+        return CGEvent.tapIsEnabled(tap: port)
+    }
+
+    func stop() {
+        if let runLoopSource {
+            CFRunLoopRemoveSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
+        }
+        if let tap { CFMachPortInvalidate(tap) }
+        tap = nil
+        runLoopSource = nil
+        swallowingEscape = false
+        session.reset()
     }
 }

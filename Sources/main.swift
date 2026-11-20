@@ -35,20 +35,40 @@ final class Controller: NSObject, NSApplicationDelegate, NSMenuDelegate {
     let access = NSMenuItem(title: "Разрешить управление текстом…", action: #selector(requestAccess), keyEquivalent: "")
     lazy var shortcut = Shortcut { [weak self] in self?.correct() }
     var permissionTimer: Timer?
+    var shortcutConnected = false
+
+    @objc func reconnectAfterWake() {
+        shortcut.stop()
+        shortcutConnected = false
+        connectShortcut()
+    }
     func connectShortcut() {
+        if IsSecureEventInputEnabled() {
+            shortcutConnected = false
+            shortcut.session.reset()
+            let issue = "macOS защищает ввод клавиатуры. Ctrl+Esc временно недоступно."
+            if lastIssue != issue { report(issue) }
+            return
+        }
         guard AXIsProcessTrusted(), shortcut.start() else {
+            shortcutConnected = false
             report("Ctrl+Esc недоступно. Проверьте разрешение на управление устройством.")
             return
         }
         shortcut.session.watchFocus(of: NSWorkspace.shared.frontmostApplication?.processIdentifier ?? 0)
-        permissionTimer?.invalidate()
-        permissionTimer = nil
-        report("")
+        if !shortcutConnected {
+            shortcutConnected = true
+            report("")
+        }
     }
     var lastIssue = ""
     let status = NSMenuItem(title: "", action: nil, keyEquivalent: "")
     func applicationDidFinishLaunching(_ notification: Notification) {
         configureIcon()
+        for name in [NSWorkspace.didWakeNotification, NSWorkspace.sessionDidBecomeActiveNotification] {
+            NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(reconnectAfterWake),
+                name: name, object: nil)
+        }
         NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(applicationChanged(_:)),
             name: NSWorkspace.didActivateApplicationNotification, object: nil)
         DistributedNotificationCenter.default().addObserver(self, selector: #selector(layoutChanged),
