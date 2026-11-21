@@ -5,8 +5,10 @@ import Carbon
 @MainActor
 func correctChat(pid: pid_t, recentLength: Int, convert: (String) -> (String, Layout)) async throws -> Layout {
     let board = NSPasteboard.general
+    let appID = NSRunningApplication(processIdentifier: pid)?.bundleIdentifier ?? ""
+    let isCodeEditor = ["com.microsoft.VSCode", "com.microsoft.VSCodeInsiders"].contains(appID)
     func checkFocus() throws {
-        guard (Editor.focusedProcess() ?? NSWorkspace.shared.frontmostApplication?.processIdentifier) == pid,
+        guard (Editor.inputProcess()) == pid,
               !IsSecureEventInputEnabled() else { throw Issue("Фокус ввода изменился.") }
     }
     func send(_ key: Int, _ flags: CGEventFlags) throws {
@@ -54,9 +56,24 @@ func correctChat(pid: pid_t, recentLength: Int, convert: (String) -> (String, La
         return nil
     }
     guard board.changeCount == initial else { throw Issue("Буфер обмена изменился.") }
-    var text = try await readSelection()
+    // VS Code copies the whole line when the selection is empty.
+    // Consult the exposed selection before issuing Copy in this editor.
+    let selectedText = (try? Editor.focused())?.get(kAXSelectedTextAttribute) as? String
+    var text: String?
+    if !isCodeEditor || selectedText?.isEmpty == false {
+        text = try await readSelection()
+    }
     if text?.isEmpty != false {
-        if recentLength > 0 {
+        if !isCodeEditor, let editor = try? Editor.focused(),
+           let selection = try? editor.selection(recentLength: recentLength),
+           editor.setRange(selection.range) {
+            try await Task.sleep(nanoseconds: 80_000_000)
+            guard let selected = try await readSelection(), selected == selection.text else {
+                _ = editor.setRange(selection.original)
+                throw Issue("Не удалось точно выделить текст. Повторите Ctrl+Esc.")
+            }
+            text = selected
+        } else if recentLength > 0 {
             for index in 0..<recentLength {
                 try send(kVK_LeftArrow, .maskShift)
                 if index % 24 == 23 { try await Task.sleep(nanoseconds: 10_000_000) }
@@ -64,15 +81,30 @@ func correctChat(pid: pid_t, recentLength: Int, convert: (String) -> (String, La
         } else {
             try send(kVK_LeftArrow, [.maskAlternate, .maskShift])
         }
-        try await Task.sleep(nanoseconds: 45_000_000)
-        text = try await readSelection()
-        if recentLength > 0, let text, text.count != recentLength || text.contains(where: { $0.isNewline }) {
-            throw Issue("Границы набранного текста изменились. Выделите нужный фрагмент.")
+        if text?.isEmpty != false {
+            try await Task.sleep(nanoseconds: 80_000_000)
+            text = try await readSelection()
+            if recentLength > 0, let text, text.count != recentLength || text.contains(where: { $0.isNewline }) {
+                throw Issue("Границы набранного текста изменились. Выделите нужный фрагмент.")
+            }
         }
     }
     guard let text, !text.isEmpty else { throw Issue("Поставьте курсор в поле сообщения после слова.") }
     let (replacement, layout) = convert(text)
     try checkFocus()
+    // Verify the actual selection immediately before paste. Some editors collapse
+    // an AX selection when their input-method or spelling UI updates.
+    guard let confirmed = try await readSelection(), confirmed == text else {
+        throw Issue("Выделение изменилось перед заменой. Выделите слово и повторите Ctrl+Esc.")
+    }
+    // Monaco's chat input can expose an empty/stale AXSelectedText even after
+    // two successful copies of the keyboard selection. In VS Code the copied
+    // selection above is authoritative; do not veto it with that AX value.
+    if !isCodeEditor, let editor = try? Editor.focused(),
+       let selected = editor.get(kAXSelectedTextAttribute) as? String,
+       selected != text {
+        throw Issue("Редактор снял выделение. Выделите слово и повторите Ctrl+Esc.")
+    }
     guard owned == board.changeCount else { throw Issue("Буфер обмена изменился.") }
     board.clearContents()
     owned = board.changeCount

@@ -22,6 +22,16 @@ struct Editor {
     func setRange(_ r: CFRange) -> Bool {
         AXUIElementSetAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, rangeValue(r)) == .success
     }
+    static func inputProcess() -> pid_t? {
+        // Pulse's editable web content may be hosted by a separate WebKit process.
+        // Keyboard commands must go to the application that owns the window.
+        let front = NSWorkspace.shared.frontmostApplication
+        if ["com.seosaks.pulse", "com.google.GeminiMacOS"].contains(front?.bundleIdentifier ?? "") {
+            return front?.processIdentifier
+        }
+        return focusedProcess() ?? front?.processIdentifier
+    }
+
     static func focusedProcess() -> pid_t? {
         let system = Editor(element: AXUIElementCreateSystemWide())
         guard let value = system.get(kAXFocusedUIElementAttribute),

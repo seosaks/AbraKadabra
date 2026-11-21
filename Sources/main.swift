@@ -150,19 +150,20 @@ final class Controller: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     return (convert(text, from: toRussian ? en : ru, to: target), target)
                 }
                 let target: Layout
-                guard let process = Editor.focusedProcess() ?? NSWorkspace.shared.frontmostApplication?.processIdentifier,
+                guard let process = Editor.inputProcess(),
                       let app = NSRunningApplication(processIdentifier: process) else {
                     throw Issue("Активное поле ввода не найдено.")
                 }
                 let length = shortcut.session.take(process: app.processIdentifier, time: ProcessInfo.processInfo.systemUptime)
                 let id = app.bundleIdentifier ?? ""
                 let isYandex = id == "ru.yandex.desktop.yandex-browser"
-                let isChat = ["com.openai.codex", "com.openai.chat"].contains(id)
+                let isChat = ["com.openai.codex", "com.openai.chat", "com.google.GeminiMacOS"].contains(id)
                 if IsSecureEventInputEnabled() {
                     throw Issue("Защищённое поле ввода.")
                 }
                 let usesWebEditor = ["com.figma.Desktop", "com.google.Chrome", "com.microsoft.edgemac",
-                                     "org.mozilla.firefox", "com.apple.Safari", "com.apple.Spotlight"].contains(id)
+                                     "org.mozilla.firefox", "com.apple.Safari", "com.apple.Spotlight", "com.seosaks.pulse",
+                                     "com.microsoft.VSCode", "com.microsoft.VSCodeInsiders"].contains(id)
                 if isChat || isYandex || usesWebEditor {
                     target = try await correctChat(pid: app.processIdentifier, recentLength: length, convert: conversion)
                 } else {
@@ -188,6 +189,8 @@ if CommandLine.arguments.contains("--check") {
     precondition(convert("Ghbdtn", from: en, to: ru) == "Привет")
     precondition(convert("Руддщ 🌍", from: ru, to: en) == "Hello 🌍")
     precondition(lastToken("🌍 Ghbdtn  ") == NSRange(location: 3, length: 6))
+    precondition(recentRange(in: "old ghbdtn", length: 3) == NSRange(location: 4, length: 6))
+    precondition(recentRange(in: "old ghbdtn", length: 6) == NSRange(location: 4, length: 6))
     let sample = "Ghbdtn rfr ltkf"
     let prefix = "Ранее написано. " + sample
     let range = recentRange(in: prefix as NSString, length: sample.count)!

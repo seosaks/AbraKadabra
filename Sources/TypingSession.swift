@@ -54,5 +54,13 @@ func recentRange(in prefix: NSString, length: Int) -> NSRange? {
     let suffix = typed.lastIndex(where: { $0.isNewline }).map { typed[typed.index(after: $0)...] } ?? typed
     guard !suffix.isEmpty else { return nil }
     let units = suffix.utf16.count
-    return NSRange(location: prefix.length - units, length: units)
+    let candidate = prefix.length - units
+    // A focus notification or input-method change can reset the keystroke count
+    // in the middle of a word. Extend that partial prefix to its word boundary.
+    let before = prefix.substring(to: candidate) as NSString
+    var start = candidate
+    if candidate > 0, let last = (before as String).last, !last.isWhitespace {
+        if let word = lastToken(before) { start = word.location }
+    }
+    return NSRange(location: start, length: prefix.length - start)
 }
